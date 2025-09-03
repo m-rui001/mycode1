@@ -145,11 +145,11 @@ uv sync # 安装依赖
 # 启动后端
 # 激活 python 蓄虚拟环境
 source .venv/bin/activate # MacOS or Linux
-venv\Scripts\activate.bat # Windows
+.venv\Scripts\activate.bat # Windows
 # MacOS or Linux 运行这条命令
 ENV=DEV uvicorn app.main:app --host 0.0.0.0 --port 8000 --ws-ping-interval 60 --ws-ping-timeout 120 --reload
 # Windows 运行这条命令
-set ENV=DEV ; uvicorn app.main:app --host 0.0.0.0 --port 8000 --ws-ping-interval 60 --ws-ping-timeout 120
+set ENV=DEV & uvicorn app.main:app --host 0.0.0.0 --port 8000 --ws-ping-interval 60 --ws-ping-timeout 120
 ```
 
 启动前端
