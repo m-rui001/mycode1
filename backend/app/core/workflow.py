@@ -115,7 +115,7 @@ class MathModelWorkFlow(WorkFlow):
         flows = Flows(self.questions)
 
         ################################################ solution steps
-        solution_flows = flows.get_solution_flows(self.questions, modeler_response)
+        solution_flows = flows.get_solution_flows(self.questions, modeler_response, code_interpreter)
         config_template = get_config_template(problem.comp_template)
 
         for key, value in solution_flows.items():

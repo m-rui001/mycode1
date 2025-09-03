@@ -12,6 +12,13 @@ from app.schemas.response import (
 from app.services.redis_manager import redis_manager
 from litellm import acompletion
 import litellm
+from litellm.exceptions import (
+    AuthenticationError,
+    NotFoundError,
+    InvalidRequestError,
+    RateLimitError,
+    InternalServerError
+)
 from app.schemas.enums import AgentType
 from app.utils.track import agent_metrics
 from icecream import ic
@@ -31,7 +38,7 @@ class LLM:
         self.model = model
         self.base_url = base_url
         self.chat_count = 0
-        self.max_tokens: int | None = None  # 添加最大token数限制
+        self.max_tokens: int | None = None  # 最大token数限制
         self.task_id = task_id
 
     async def chat(
@@ -39,12 +46,12 @@ class LLM:
         history: list = None,
         tools: list = None,
         tool_choice: str = None,
-        max_retries: int = 8,  # 添加最大重试次数
-        retry_delay: float = 1.0,  # 添加重试延迟
-        top_p: float | None = None,  # 添加top_p参数,
-        agent_name: AgentType = AgentType.SYSTEM,  # CoderAgent or WriterAgent
+        max_retries: int = 8,
+        retry_delay: float = 1.0,
+        top_p: float | None = None,
+        agent_name: AgentType = AgentType.SYSTEM,
         sub_title: str | None = None,
-    ) -> str:
+    ):
         logger.info(f"subtitle是:{sub_title}")
 
         # 验证和修复工具调用完整性
@@ -70,10 +77,8 @@ class LLM:
         if self.base_url:
             kwargs["base_url"] = self.base_url
 
-        # TODO: stream 输出
         for attempt in range(max_retries):
             try:
-                # completion = self.client.chat.completions.create(**kwargs)
                 response = await acompletion(**kwargs)
                 logger.info(f"API返回: {response}")
                 if not response or not hasattr(response, "choices"):
@@ -81,13 +86,60 @@ class LLM:
                 self.chat_count += 1
                 await self.send_message(response, agent_name, sub_title)
                 return response
-            except (json.JSONDecodeError, litellm.InternalServerError) as e:
-                logger.error(f"第{attempt + 1}次重试: {str(e)}")
-                if attempt < max_retries - 1:  # 如果不是最后一次尝试
-                    time.sleep(retry_delay * (attempt + 1))  # 指数退避
-                    continue
-                logger.debug(f"请求参数: {kwargs}")
-                raise  # 如果所有重试都失败，则抛出异常
+            except AuthenticationError as e:
+                error_msg = f"API Key无效或已过期: {str(e)[:50]}"
+                logger.error(f"第{attempt + 1}次重试: {error_msg}")
+                await self.send_message(
+                    SystemMessage(content=error_msg, type="error"),
+                    agent_name,
+                    sub_title
+                )
+            except NotFoundError as e:
+                error_msg = f"模型不存在（Model ID错误）: {str(e)[:50]}"
+                logger.error(f"第{attempt + 1}次重试: {error_msg}")
+                await self.send_message(
+                    SystemMessage(content=error_msg, type="error"),
+                    agent_name,
+                    sub_title
+                )
+            except InvalidRequestError as e:
+                error_msg = f"请求参数错误（如Base URL无效）: {str(e)[:50]}"
+                logger.error(f"第{attempt + 1}次重试: {error_msg}")
+                await self.send_message(
+                    SystemMessage(content=error_msg, type="error"),
+                    agent_name,
+                    sub_title
+                )
+            except RateLimitError as e:
+                error_msg = f"速率限制超限，请稍后重试: {str(e)[:50]}"
+                logger.error(f"第{attempt + 1}次重试: {error_msg}")
+                await self.send_message(
+                    SystemMessage(content=error_msg, type="error"),
+                    agent_name,
+                    sub_title
+                )
+            except (json.JSONDecodeError, InternalServerError) as e:
+                error_msg = f"服务端错误: {str(e)[:50]}"
+                logger.error(f"第{attempt + 1}次重试: {error_msg}")
+                await self.send_message(
+                    SystemMessage(content=error_msg, type="error"),
+                    agent_name,
+                    sub_title
+                )
+            except Exception as e:
+                error_msg = f"未知错误: {str(e)[:50]}"
+                logger.error(f"第{attempt + 1}次重试: {error_msg}")
+                await self.send_message(
+                    SystemMessage(content=error_msg, type="error"),
+                    agent_name,
+                    sub_title
+                )
+
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))
+                continue
+            logger.debug(f"请求参数: {kwargs}")
+            raise
 
     def _validate_and_fix_tool_calls(self, history: list) -> list:
         """验证并修复工具调用完整性"""
@@ -96,18 +148,15 @@ class LLM:
 
         ic(f"🔍 开始验证工具调用，历史消息数量: {len(history)}")
 
-        # 查找所有未匹配的tool_calls
         fixed_history = []
         i = 0
 
         while i < len(history):
             msg = history[i]
 
-            # 如果是包含tool_calls的消息
             if isinstance(msg, dict) and "tool_calls" in msg and msg["tool_calls"]:
                 ic(f"📞 发现tool_calls消息在位置 {i}")
 
-                # 检查每个tool_call是否都有对应的response，分别处理
                 valid_tool_calls = []
                 invalid_tool_calls = []
 
@@ -116,7 +165,6 @@ class LLM:
                     ic(f"  检查tool_call_id: {tool_call_id}")
 
                     if tool_call_id:
-                        # 查找对应的tool响应
                         found_response = False
                         for j in range(i + 1, len(history)):
                             if (
@@ -133,9 +181,7 @@ class LLM:
                             ic(f"  ❌ 未找到匹配响应: {tool_call_id}")
                             invalid_tool_calls.append(tool_call)
 
-                # 根据检查结果处理消息
                 if valid_tool_calls:
-                    # 有有效的tool_calls，保留它们
                     fixed_msg = msg.copy()
                     fixed_msg["tool_calls"] = valid_tool_calls
                     fixed_history.append(fixed_msg)
@@ -143,7 +189,6 @@ class LLM:
                         f"  🔧 保留 {len(valid_tool_calls)} 个有效tool_calls，移除 {len(invalid_tool_calls)} 个无效的"
                     )
                 else:
-                    # 没有有效的tool_calls，移除tool_calls但可能保留其他内容
                     cleaned_msg = {k: v for k, v in msg.items() if k != "tool_calls"}
                     if cleaned_msg.get("content"):
                         fixed_history.append(cleaned_msg)
@@ -151,12 +196,10 @@ class LLM:
                     else:
                         ic(f"  🗑️ 完全移除空的tool_calls消息")
 
-            # 如果是tool响应消息，检查是否是孤立的
             elif isinstance(msg, dict) and msg.get("role") == "tool":
                 tool_call_id = msg.get("tool_call_id")
                 ic(f"🔧 检查tool响应消息: {tool_call_id}")
 
-                # 查找对应的tool_calls
                 found_call = False
                 for j in range(len(fixed_history)):
                     if fixed_history[j].get("tool_calls") and any(
@@ -173,7 +216,6 @@ class LLM:
                     ic(f"  🗑️ 移除孤立的tool响应: {tool_call_id}")
 
             else:
-                # 普通消息，直接保留
                 fixed_history.append(msg)
 
             i += 1
@@ -185,59 +227,45 @@ class LLM:
 
         return fixed_history
 
-    async def send_message(self, response, agent_name, sub_title=None):
+    async def send_message(self, response, agent_name: AgentType, sub_title: str | None = None):
+        """修复：明确区分系统消息和正常响应，确保类型安全"""
         logger.info(f"subtitle是:{sub_title}")
-        content = response.choices[0].message.content
-
-        match agent_name:
-            case AgentType.CODER:
-                agent_msg: CoderMessage = CoderMessage(content=content)
-            case AgentType.WRITER:
-                # 处理 Markdown 格式的图片语法
+        
+        # 处理系统错误消息
+        if isinstance(response, SystemMessage):
+            agent_msg = response
+        else:
+            # 处理正常响应
+            content = response.choices[0].message.content
+            
+            # 根据Agent类型生成对应消息
+            if agent_name == AgentType.CODER:
+                agent_msg = CoderMessage(content=content)
+            elif agent_name == AgentType.WRITER:
                 content, _ = split_footnotes(content)
                 content = transform_link(self.task_id, content)
-                agent_msg: WriterMessage = WriterMessage(
+                agent_msg = WriterMessage(
                     content=content,
                     sub_title=sub_title,
                 )
-            case AgentType.MODELER:
-                agent_msg: ModelerMessage = ModelerMessage(content=content)
-            case AgentType.SYSTEM:
-                agent_msg: SystemMessage = SystemMessage(content=content)
-            case AgentType.COORDINATOR:
-                agent_msg: CoordinatorMessage = CoordinatorMessage(content=content)
-            case _:
+            elif agent_name == AgentType.MODELER:
+                agent_msg = ModelerMessage(content=content)
+            elif agent_name == AgentType.SYSTEM:
+                agent_msg = SystemMessage(content=content)
+            elif agent_name == AgentType.COORDINATOR:
+                agent_msg = CoordinatorMessage(content=content)
+            else:
                 raise ValueError(f"不支持的agent类型: {agent_name}")
 
+        # 发送消息到Redis
         await redis_manager.publish_message(
             self.task_id,
             agent_msg,
         )
 
 
-# class DeepSeekModel(LLM):
-#     def __init__(
-#         self,
-#         api_key: str,
-#         model: str,
-#         base_url: str,
-#         task_id: str,
-#     ):
-#         super().__init__(api_key, model, base_url, task_id)
-# self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
-
-
 async def simple_chat(model: LLM, history: list) -> str:
-    """
-    Description of the function.
-
-    Args:
-        model (LLM): 模型
-        history (list): 构造好的历史记录（包含system_prompt,user_prompt）
-
-    Returns:
-        return_type: Description of the return value.
-    """
+    """简化版聊天函数"""
     kwargs = {
         "api_key": model.api_key,
         "model": model.model,
@@ -249,5 +277,4 @@ async def simple_chat(model: LLM, history: list) -> str:
         kwargs["base_url"] = model.base_url
 
     response = await acompletion(**kwargs)
-
     return response.choices[0].message.content

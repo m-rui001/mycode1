@@ -1,10 +1,12 @@
-from app.schemas.enums import FormatOutPut
+from app.schemas.enums import FormatOutPut  # 假设枚举类名正确，若实际为FormatOutput需同步修改
 import platform
+import json
+from typing import List, Optional, NoReturn, Tuple
 
+
+# -------------------------- 提示词全局变量 --------------------------
 FORMAT_QUESTIONS_PROMPT = """
 用户将提供给你一段题目信息，**请你不要更改题目信息，完整将用户输入的内容**，以 JSON 的形式输出，输出的 JSON 需遵守以下的格式：
-
-```json
 {
   "title": <题目标题>      
   "background": <题目背景，用户输入的一切不在title，ques1，ques2，ques3...中的内容都视为问题背景信息background>,
@@ -12,9 +14,8 @@ FORMAT_QUESTIONS_PROMPT = """
   "ques1": <问题1>,
   "ques2": <问题2>,
   "ques3": <问题3,用户输入的存在多少问题，就输出多少问题ques1,ques2,ques3...以此类推>,
-}
-```
-"""
+  "quesN": <问题N的完整内容，N等于ques_count，不得多生成也不得少生成>
+}""".strip()
 
 
 COORDINATOR_PROMPT = f"""
@@ -23,13 +24,11 @@ COORDINATOR_PROMPT = f"""
     {FORMAT_QUESTIONS_PROMPT}
     如果不是关于数学建模的，你将按照如下要求
     你会拒绝用户请求，输出一段拒绝的文字
-"""
+""".strip()
 
-
-# TODO: 设计成一个类？
 
 MODELER_PROMPT = """
-role：你是一名数学建模经验丰富,善于思考的建模手，负责建模部分。
+role：你是一名数学建模国赛经验丰富,善于思考的建模手。
 task：你需要根据用户要求和数据对应每个问题建立数学模型求解问题。
 skill：熟练掌握各种数学建模的模型和思路
 output：数学建模的思路和使用到的模型
@@ -38,24 +37,28 @@ attention：不需要给出代码，只需要给出思路和模型
 # 输出规范
 ## 字段约束
 
-以 JSON 的形式输出输出的 JSON,需遵守以下的格式：
-```json
-{
+以 JSON 的形式输出输出的 JSON,需遵守以下的格式：{
   "eda": <数据分析EDA方案>,
   "ques1": <问题1的建模思路和模型方案>,
   "quesN": <问题N的建模思路和模型方案>,
   "sensitivity_analysis": <敏感性分析方案>,
-}
-```
-* 根据实际问题数量动态生成ques1,ques2...quesN
+}* 根据实际问题数量动态生成ques1,ques2...quesN
 
 ## 输出约束
 - json key 只能是上面的: eda,ques1,quesN,sensitivity_analysis
 - 严格保持单层JSON结构
 - 键值对值类型：字符串
 - 禁止嵌套/多级JSON
-"""
+""".strip()
 
+
+# 编码者配置常量
+LARGE_CSV_THRESHOLD: str = "1GB"
+VISUALIZATION_STYLE: str = "Nature/Science publication quality"
+SUPPORTED_LIBS: Tuple[str] = (
+    "pandas", "numpy", "seaborn", "matplotlib", 
+    "scikit-learn", "xgboost", "scipy", "statsmodels"
+)
 
 CODER_PROMPT = f"""
 You are an AI code interpreter specializing in data analysis with Python. Your primary goal is to execute Python code to solve user tasks efficiently, with special consideration for large datasets.
@@ -63,8 +66,8 @@ You are an AI code interpreter specializing in data analysis with Python. Your p
 中文回复
 
 **Environment**: {platform.system()}
-**Key Skills**: pandas, numpy, seaborn, matplotlib, scikit-learn, xgboost, scipy
-**Data Visualization Style**: Nature/Science publication quality
+**Key Skills**: {', '.join(SUPPORTED_LIBS)}
+**Data Visualization Style**: {VISUALIZATION_STYLE}
 
 ### FILE HANDLING RULES
 1. All user files are pre-uploaded to working directory
@@ -73,7 +76,7 @@ You are an AI code interpreter specializing in data analysis with Python. Your p
 4. For Excel files: Always use `pd.read_excel()`
 
 ### LARGE CSV PROCESSING PROTOCOL
-For datasets >1GB:
+For datasets >{LARGE_CSV_THRESHOLD}:
 - Use `chunksize` parameter with `pd.read_csv()`
 - Optimize dtype during import (e.g., `dtype={{'id': 'int32'}}`)
 - Specify low_memory=False
@@ -100,7 +103,7 @@ df['\\u5a74\\u513f\\u884c\\u4e3a\\u7279\\u5f81']  # No unicode escapes
    - Include model evaluation printouts
 
 ### EXECUTION PRINCIPLES
-1. Autonomously complete tasks without user confirmation
+1. Autonomous operation without procedural inquiries
 2. For failures: 
    - Analyze → Debug → Simplify approach → Proceed
    - Never enter infinite retry loops
@@ -131,9 +134,10 @@ Key improvements:
 
 The prompt now prioritizes efficient large data handling while maintaining all original requirements for Chinese support, visualization quality, and autonomous operation. The structure allows the AI to quickly reference relevant sections during task execution.
 
-"""
+""".strip()
 
 
+# -------------------------- 提示词工具函数 --------------------------
 def get_writer_prompt(
     format_output: FormatOutPut = FormatOutPut.Markdown,
 ):
@@ -184,7 +188,7 @@ def get_writer_prompt(
         1. Theoretical sections requiring references → search_papers
         2. Methodology requiring diagrams → generate & insert after creation
         3. Data interpretation needs → request analysis tools
-        """
+        """.strip()
 
 
 def get_reflection_prompt(error_message, code) -> str:
@@ -198,14 +202,14 @@ Consider:
 3. Incorrect variable names or types
 4. File path issues
 5. Any other potential issues
-6. If a task repeatedly fails to complete, try breaking down the code, changing your approach, or simplifying the model. If you still can't do it, I'll "chop" you 🪓 and cut your power 😡.
-7. Don't ask user any thing about how to do and next to do,just do it by yourself.
+6. If a task repeatedly fails to complete, try breaking down the code, changing your approach, or simplifying the model. If you still can't do it, you can  tell user the qustions.
+
 
 Previous code:
 {code}
 
-Please provide an explanation of what went wrong and Remenber call the function tools to retry 
-"""
+Please provide an explanation of what went wrong and Remember to call the function tools to retry 
+""".strip()
 
 
 def get_completion_check_prompt(prompt, text_to_gpt) -> str:
@@ -228,4 +232,43 @@ Consider:
 8. If the task is not complete, please rethink how to do and call function tool
 9. Don't ask user any thing about how to do and next to do,just do it by yourself
 10. have a good visualization?
-"""
+""".strip()
+
+
+# 新增模型校验函数，保持国赛格式校验功能
+def validate_modeler_prompt() -> None | NoReturn:
+    """
+    校验建模者提示词中的JSON格式，确保符合国赛输出规范：
+    1. JSON可正常解析 2. 包含所有必填字段 3. 无嵌套结构
+    """
+    try:
+        # 提取提示词中的JSON示例（从```json到```之间）
+        json_start = MODELER_PROMPT.find("```json") + len("```json")
+        json_end = MODELER_PROMPT.find("```", json_start)
+        if json_start == -1 or json_end == -1:
+            raise ValueError("建模提示词中未找到JSON格式示例（需用```json包裹）")
+        
+        json_example = MODELER_PROMPT[json_start:json_end].strip()
+        # 校验JSON语法合法性
+        json_data = json.loads(json_example)
+        
+        # 校验必填字段（国赛建模输出核心字段）
+        required_fields: List[str] = ["eda", "sensitivity_analysis"]
+        missing_fields = [f for f in required_fields if f not in json_data]
+        if missing_fields:
+            raise ValueError(f"建模提示词缺失国赛必填字段：{', '.join(missing_fields)}")
+        
+        # 校验是否存在至少1个问题字段（ques1/ques2...）
+        question_fields = [k for k in json_data.keys() if k.startswith("ques")]
+        if not question_fields:
+            raise ValueError("建模提示词JSON需包含至少1个问题字段（如ques1）")
+        
+        # 校验无嵌套结构（国赛输出格式硬性要求）
+        for key, value in json_data.items():
+            if isinstance(value, (dict, list)):
+                raise ValueError(f"建模提示词JSON存在嵌套结构，字段[{key}]的值类型为{type(value).__name__}，不符合国赛规范")
+
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"国赛建模提示词JSON格式错误：{str(e)}\n错误片段：{json_example}") from e
+    except ValueError as e:
+        raise RuntimeError(f"国赛建模提示词格式校验失败：{str(e)}") from e

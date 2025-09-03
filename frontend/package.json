@@ -25,7 +25,7 @@
     "render-jupyter-notebook-vue": "^2.2.4",
     "theme-colors": "^0.1.0",
     "vue": "^3.5.13",
-    "vue-router": "4"
+    "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
@@ -40,11 +40,11 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.0.2",
-    "tailwindcss": "3",
+    "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "~5.7.2",
-    "vite": "^6.1.0",
-    "vue-tsc": "^2.2.0"
+    "typescript": "~5.7.3",
+    "vite": "^6.1.1",
+    "vue-tsc": "^2.2.4"
   },
   "packageManager": "pnpm@10.6.3"
 }

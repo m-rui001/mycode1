@@ -1,13 +1,13 @@
 # docker-compose.yml
 
-services:
-  redis:
-    image: redis:alpine
-    container_name: mathmodelagent_redis
-    ports:
-      - "6379:6379" # 将 Redis 容器的 6379 端口映射到主机的 6379 端口
-    volumes:
-      - redis_data:/data # Redis 数据的持久化存储卷
+#services:
+#  redis:
+#    image: docker.1ms.run/redis
+#    container_name: mathmodelagent_redis
+#    ports:
+#      - "6379:6379" # 将 Redis 容器的 6379 端口映射到主机的 6379 端口
+#    volumes:
+#      - redis_data:/data # Redis 数据的持久化存储卷
 
   backend:
     build:
@@ -47,6 +47,6 @@ services:
     stdin_open: true
     tty: true
 
-volumes:
-  redis_data: # 定义用于 Redis 持久化的命名卷
-  backend_venv: # 定义用于后端 venv 的命名卷
+#volumes:
+#  redis_data: # 定义用于 Redis 持久化的命名卷
+#  backend_venv: # 定义用于后端 venv 的命名卷
