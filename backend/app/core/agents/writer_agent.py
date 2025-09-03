@@ -162,7 +162,8 @@ class WriterAgent(Agent):  # 同样继承自Agent类
             logger.error(f"总结生成失败: {str(e)}")
             # 返回一个基础总结，避免完全失败
             return "由于网络原因无法生成详细总结，但已完成主要任务处理。"
-    async def process_parallel_sections(sections):
+    async def process_parallel_sections(self,sections):
         return await asyncio.gather(*[self.write_section(sec) for sec in sections])
     def get_workdir_files(self):
-        return [f for f in os.listdir(self.task_id) if os.path.isfile(f)]
+        work_dir = get_work_dir(self.task_id)  # 获取正确的工作目录
+        return [f for f in os.listdir(work_dir) if os.path.isfile(os.path.join(work_dir, f))]

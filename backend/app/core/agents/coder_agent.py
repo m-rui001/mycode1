@@ -90,6 +90,7 @@ class CoderAgent(Agent):  # 同样继承自Agent类
             and self.current_chat_turns < self.max_chat_turns
         ):
             self.current_chat_turns += 1
+            retry_count += 1 
             logger.info(f"当前对话轮次: {self.current_chat_turns}")
             response = await self.model.chat(
                 history=self.chat_history,
@@ -115,6 +116,7 @@ class CoderAgent(Agent):  # 同样继承自Agent类
                     decoder = json.JSONDecoder(strict=False)
                     args = decoder.decode(tool_call.function.arguments)
                     code = args.get("code", "")
+                    logger.info("代码解析成功")
                     if not code:
                         raise ValueError("工具调用参数缺少code字段")
                 except JSONDecodeError as e:
@@ -127,7 +129,7 @@ class CoderAgent(Agent):  # 同样继承自Agent类
                     except JSONDecodeError:
                         raise RuntimeError(f"工具调用参数JSON格式错误，无法修复: {str(e)}")
                     
-                    code = arguments["code"]
+                    code = args.get("code", "") 
                     logger.info("代码解析成功")
 
                 except json.JSONDecodeError as e:

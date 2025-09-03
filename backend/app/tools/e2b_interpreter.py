@@ -156,82 +156,118 @@ class E2BCodeInterpreter(BaseCodeInterpreter):
                 )
 
             # 处理执行结果
-        if execution.results:
-            for result in execution.results:
-                # 1. 文本格式
-                if str(result):
-                    content_to_display.append(
-                        ResultModel(type="result", format="text", msg=str(result))
-                    )
-                # 2. HTML格式
-                if result._repr_html_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result", format="html", msg=result._repr_html_()
+            if execution.results:
+                for result in execution.results:
+                    # 1. 文本格式（非_repr_*方法，无需保护）
+                    if str(result):
+                        content_to_display.append(
+                            ResultModel(type="result", format="text", msg=str(result))
                         )
-                    )
-                # 3. Markdown格式
-                if result._repr_markdown_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result",
-                            format="markdown",
-                            msg=result._repr_markdown_(),
-                        )
-                    )
-                # 4. PNG图片（base64字符串，前端可直接渲染）
-                if result._repr_png_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result", format="png", msg=result._repr_png_()
-                        )
-                    )
-                # 5. JPEG图片
-                if result._repr_jpeg_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result", format="jpeg", msg=result._repr_jpeg_()
-                        )
-                    )
-                # 6. SVG
-                if result._repr_svg_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result", format="svg", msg=result._repr_svg_()
-                        )
-                    )
-                # 7. PDF
-                if result._repr_pdf_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result", format="pdf", msg=result._repr_pdf_()
-                        )
-                    )
-                # 8. LaTeX
-                if result._repr_latex_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result", format="latex", msg=result._repr_latex_()
-                        )
-                    )
-                # 9. JSON
-                if result._repr_json_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result",
-                            format="json",
-                            msg=json.dumps(result._repr_json_()),
-                        )
-                    )
-                # 10. JavaScript
-                if result._repr_javascript_():
-                    content_to_display.append(
-                        ResultModel(
-                            type="result",
-                            format="javascript",
-                            msg=result._repr_javascript_(),
-                        )
-                    )
+                    
+                    # 2. HTML格式（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_html_") and result._repr_html_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result", format="html", msg=result._repr_html_()
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_html_方法，跳过处理: {str(e)}")
+                    
+                    # 3. Markdown格式（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_markdown_") and result._repr_markdown_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result",
+                                    format="markdown",
+                                    msg=result._repr_markdown_(),
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_markdown_方法，跳过处理: {str(e)}")
+                    
+                    # 4. PNG图片（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_png_") and result._repr_png_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result", format="png", msg=result._repr_png_()
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_png_方法，跳过处理: {str(e)}")
+                    
+                    # 5. JPEG图片（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_jpeg_") and result._repr_jpeg_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result", format="jpeg", msg=result._repr_jpeg_()
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_jpeg_方法，跳过处理: {str(e)}")
+                    
+                    # 6. SVG（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_svg_") and result._repr_svg_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result", format="svg", msg=result._repr_svg_()
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_svg_方法，跳过处理: {str(e)}")
+                    
+                    # 7. PDF（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_pdf_") and result._repr_pdf_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result", format="pdf", msg=result._repr_pdf_()
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_pdf_方法，跳过处理: {str(e)}")
+                    
+                    # 8. LaTeX（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_latex_") and result._repr_latex_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result", format="latex", msg=result._repr_latex_()
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_latex_方法，跳过处理: {str(e)}")
+                    
+                    # 9. JSON（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_json_") and result._repr_json_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result",
+                                    format="json",
+                                    msg=json.dumps(result._repr_json_()),
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_json_方法，跳过处理: {str(e)}")
+                    
+                    # 10. JavaScript（新增try-except保护）
+                    try:
+                        if hasattr(result, "_repr_javascript_") and result._repr_javascript_():
+                            content_to_display.append(
+                                ResultModel(
+                                    type="result",
+                                    format="javascript",
+                                    msg=result._repr_javascript_(),
+                                )
+                            )
+                    except AttributeError as e:
+                        logger.debug(f"Result对象无_repr_javascript_方法，跳过处理: {str(e)}")
 
                     # 处理主要结果
                 # if result.is_main_result and result.text:
