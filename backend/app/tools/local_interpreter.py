@@ -230,3 +230,9 @@ class LocalCodeInterpreter(BaseCodeInterpreter):
     def _create_work_dir(self):
         """Ensure the working directory exists after a restart."""
         os.makedirs(self.work_dir, exist_ok=True)
+        
+    def list_files(self) -> list[str]:
+        """列出工作目录中的所有文件"""
+        if not os.path.exists(self.work_dir):
+            return []
+        return [f for f in os.listdir(self.work_dir) if os.path.isfile(os.path.join(self.work_dir, f))]

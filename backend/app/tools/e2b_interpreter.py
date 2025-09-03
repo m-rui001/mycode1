@@ -83,9 +83,11 @@ class E2BCodeInterpreter(BaseCodeInterpreter):
     async def _pre_execute_code(self):
         init_code = (
             "import matplotlib.pyplot as plt\n"
-            # "plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial Unicode MS']\n"
-            # "plt.rcParams['axes.unicode_minus'] = False\n"
-            # "plt.rcParams['font.family'] = 'sans-serif'\n"
+            "import matplotlib as mpl\n"
+            "plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'WenQuanYi Micro Hei', 'PingFang SC']\n"
+            "plt.rcParams['axes.unicode_minus'] = False\n"
+            "plt.rcParams['font.family'] = 'sans-serif'\n"
+            "mpl.rcParams['font.size'] = 12\n"
         )
         await self.execute_code(init_code)
 
@@ -369,3 +371,9 @@ class E2BCodeInterpreter(BaseCodeInterpreter):
 
         except Exception as e:
             logger.error(f"文件同步失败: {str(e)}")
+    async def list_files(self) -> list[str]:
+        """列出沙箱中的文件"""
+        if not self.sbx:
+            return []
+        files = await self.sbx.files.list("/home/user/")
+        return [f.name for f in files if f.is_file]        

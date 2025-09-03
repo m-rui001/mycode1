@@ -1,3 +1,4 @@
+import re  # 新增：导入正则表达式模块
 from app.core.agents.agent import Agent
 from app.config.setting import settings
 from app.utils.log_util import logger
@@ -9,6 +10,7 @@ from app.schemas.A2A import CoderToWriter
 from app.core.prompts import CODER_PROMPT
 from app.utils.common_utils import get_current_files
 import json
+from json import JSONDecodeError
 from app.core.prompts import get_reflection_prompt, get_completion_check_prompt
 from app.core.functions import coder_tools
 from icecream import ic
@@ -105,76 +107,48 @@ class CoderAgent(Agent):  # 同样继承自Agent类
                 tool_call = response.choices[0].message.tool_calls[0]
                 tool_id = tool_call.id
                 # TODO: json JSON解析时遇到了无效的转义字符
-                if tool_call.function.name == "execute_code":
-                    logger.info(f"调用工具: {tool_call.function.name}")
-                    await redis_manager.publish_message(
-                        self.task_id,
-                        SystemMessage(
-                            content=f"代码手调用{tool_call.function.name}工具"
-                        ),
-                    )
+            # TODO: 处理JSON解析时遇到的无效转义字符
+            if tool_call.function.name == "execute_code":
+                logger.info(f"调用工具: {tool_call.function.name}")
+                try:
+                    # 处理可能的转义字符问题
+                    decoder = json.JSONDecoder(strict=False)
+                    args = decoder.decode(tool_call.function.arguments)
+                    code = args.get("code", "")
+                    if not code:
+                        raise ValueError("工具调用参数缺少code字段")
+                except JSONDecodeError as e:
+                    logger.error(f"JSON解析错误: {str(e)}，原始参数: {tool_call.function.arguments}")
+                    # 尝试手动修复常见转义问题（如单引号转双引号）
+                    fixed_arguments = tool_call.function.arguments.replace("'", '"')
+                    try:
+                        args = decoder.decode(fixed_arguments)
+                        code = args.get("code", "")
+                    except JSONDecodeError:
+                        raise RuntimeError(f"工具调用参数JSON格式错误，无法修复: {str(e)}")
+                    
+                    code = arguments["code"]
+                    logger.info("代码解析成功")
 
-                    code = json.loads(tool_call.function.arguments)["code"]
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON解析失败: {str(e)}")
+                    logger.error(f"错误位置: 行 {e.lineno}, 列 {e.colno}")
+                    logger.error(f"处理后的参数字符串: {arguments_str}")
+                    raise ValueError(f"工具调用参数格式错误（无效转义字符可能导致）: {e}")
+                except KeyError as e:
+                    logger.error(f"JSON结构错误: {str(e)}")
+                    raise ValueError(f"工具调用参数缺少必要字段: {e}")
+                except Exception as e:
+                    logger.error(f"解析工具参数时发生未知错误: {str(e)}")
+                    raise
 
-                    await redis_manager.publish_message(
-                        self.task_id,
-                        InterpreterMessage(
-                            input={"code": code},
-                        ),
-                    )
+                await redis_manager.publish_message(
+                    self.task_id,
+                    InterpreterMessage(
+                        input={"code": code},
+                    ),
+                )
 
-                    # 更新对话历史 - 添加助手的响应
-                    await self.append_chat_history(
-                        response.choices[0].message.model_dump()
-                    )
-                    logger.info(response.choices[0].message.model_dump())
-
-                    # 执行工具调用
-                    logger.info("执行工具调用")
-                    (
-                        text_to_gpt,
-                        error_occurred,
-                        error_message,
-                    ) = await self.code_interpreter.execute_code(code)
-
-                    # 添加工具执行结果
-                    if error_occurred:
-                        # 即使发生错误也要添加tool响应
-                        await self.append_chat_history(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tool_id,
-                                "name": "execute_code",
-                                "content": error_message,
-                            }
-                        )
-
-                        logger.warning(f"代码执行错误: {error_message}")
-                        retry_count += 1
-                        logger.info(f"当前尝试次:{retry_count} / {self.max_retries}")
-                        last_error_message = error_message
-                        reflection_prompt = get_reflection_prompt(error_message, code)
-
-                        await redis_manager.publish_message(
-                            self.task_id,
-                            SystemMessage(content="代码手反思纠正错误", type="error"),
-                        )
-
-                        await self.append_chat_history(
-                            {"role": "user", "content": reflection_prompt}
-                        )
-                        # 如果代码出错，返回重新开始
-                        continue
-                    else:
-                        # 成功执行的tool响应
-                        await self.append_chat_history(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tool_id,
-                                "name": "execute_code",
-                                "content": text_to_gpt,
-                            }
-                        )
             else:
                 # 没有工具调用，表示任务完成
                 logger.info("没有工具调用，任务完成")

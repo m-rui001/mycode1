@@ -28,26 +28,46 @@ class CoordinatorAgent(Agent):
             history=self.chat_history,
             agent_name=self.__class__.__name__,
         )
-        json_str = response.choices[0].message.content
+        # 记录LLM原始响应，便于排查格式问题
+        raw_content = response.choices[0].message.content
+        logger.info(f"LLM原始响应内容: {raw_content}")
+        json_str = raw_content
 
-        # if not json_str.startswith("```json"):
-        #     logger.info(f"拒绝回答用户非数学建模请求:{json_str}")
-        #     raise ValueError(f"拒绝回答用户非数学建模请求:{json_str}")
 
-        # 清理 JSON 字符串
-        json_str = json_str.replace("```json", "").replace("```", "").strip()
+        json_match = re.search(r"```json(.*?)```", json_str, re.DOTALL)
+        if json_match:
+            # 提取代码块内的JSON
+            json_str = json_match.group(1).strip()
+        else:
+            # 若没有代码块标记，直接使用原始内容尝试解析
+            logger.warning("LLM返回内容未包含```json代码块，尝试直接解析JSON")
+            json_str = json_str.strip()  # 仅去除首尾空白
+
         # 移除可能的控制字符
         json_str = re.sub(r"[\x00-\x1F\x7F]", "", json_str)
 
         if not json_str:
-            raise ValueError("返回的 JSON 字符串为空，请检查输入内容。")
+            raise ValueError("提取后的JSON字符串为空，请检查输入内容。")
 
         try:
             questions = json.loads(json_str)
+            # 验证必要字段存在性
+            if "ques_count" not in questions:
+                raise KeyError("JSON结构中缺少必要字段'ques_count'")
             ques_count = questions["ques_count"]
+            # 验证字段类型
+            if not isinstance(ques_count, int):
+                raise TypeError(f"'ques_count'应为整数类型，实际为{type(ques_count).__name__}")
+            
             logger.info(f"questions:{questions}")
             return CoordinatorToModeler(questions=questions, ques_count=ques_count)
         except json.JSONDecodeError as e:
-            logger.error(f"JSON 解析错误，原始字符串: {json_str}")
+            logger.error(f"JSON解析错误，原始字符串: {json_str}")
             logger.error(f"错误详情: {str(e)}")
-            raise ValueError(f"JSON 解析错误: {e}")
+            raise ValueError(f"JSON解析错误: {e}")
+        except KeyError as e:
+            logger.error(f"JSON结构错误: {e}")
+            raise ValueError(f"JSON结构错误: {e}")
+        except TypeError as e:
+            logger.error(f"JSON字段类型错误: {e}")
+            raise ValueError(f"JSON字段类型错误: {e}")

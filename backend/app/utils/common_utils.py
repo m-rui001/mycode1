@@ -92,10 +92,11 @@ def md_2_docx(task_id: str):
     docx_path = os.path.join(work_dir, "res.docx")
 
     extra_args = [
-        "--resource-path",
-        str(work_dir),
-        "--mathml",  # MathML 格式公式
+        "--resource-path", str(work_dir),
+        "--mathml",
         "--standalone",
+        "--pdf-engine=xelatex",  # 新增：支持LaTeX公式
+        "-V", "mainfont=SimHei",  # 新增：确保中文公式周围文字正常显示
     ]
 
     pypandoc.convert_file(

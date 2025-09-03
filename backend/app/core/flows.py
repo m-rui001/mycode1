@@ -143,7 +143,7 @@ class Flows:
                 不需要编写代码，代码手执行结果如下：
                 1. 代码逻辑：{coder_response}
                 2. 输出结果：{code_output}
-                按照如下模板撰写：{config_template[ques_key]}
+                按照如下模板撰写：{config_template.get(ques_key, "请根据问题要求进行详细分析和阐述")}
                 要求：结果部分需量化，与代码输出一致，符合国赛规范
             """
             for ques_key in quesx_keys

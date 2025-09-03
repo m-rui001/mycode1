@@ -5,6 +5,20 @@ import os
 
 
 class NotebookSerializer:
+    def add_code_cell_to_notebook(self, code: str):
+        """添加代码单元格到笔记本"""
+        code_cell = nbf.new_code_cell(source=code)
+        self.nb["cells"].append(code_cell)
+        self.write_to_notebook()
+
+    def add_code_cell_output_to_notebook(self, output: str):
+        """添加代码输出到笔记本"""
+        if not self.nb["cells"]:
+            return
+        output_cell = nbf.new_output(output_type="stream", name="stdout", text=output)
+        self.nb["cells"][-1]["outputs"].append(output_cell)
+        self.write_to_notebook()
+        
     def __init__(self, work_dir=None, notebook_name="notebook.ipynb"):
         self.nb = nbf.new_notebook()
         self.notebook_path = None

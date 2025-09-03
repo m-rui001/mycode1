@@ -1,12 +1,17 @@
 from app.schemas.enums import FormatOutPut  # 假设枚举类名正确，若实际为FormatOutput需同步修改
 import platform
 import json
-from typing import List, Optional, NoReturn, Tuple
+
+from typing import List, Optional, NoReturn, Tuple,Any
 
 
 # -------------------------- 提示词全局变量 --------------------------
 FORMAT_QUESTIONS_PROMPT = """
-用户将提供给你一段题目信息，**请你不要更改题目信息，完整将用户输入的内容**，以 JSON 的形式输出，输出的 JSON 需遵守以下的格式：
+用户将提供给你一段题目信息，**请你不要更改题目信息，用户将提供给你一段题目信息，请你完整输出内容，以JSON形式返回，必须满足：
+1. 所有字符串字段（title、background、ques1...）必须用双引号闭合，内容完整无截断；
+2. 确保JSON结构正确（括号匹配、逗号分隔正确）；
+3. 不得遗漏任何问题内容。
+输出格式：
 {
   "title": <题目标题>      
   "background": <题目背景，用户输入的一切不在title，ques1，ques2，ques3...中的内容都视为问题背景信息background>,
@@ -235,40 +240,47 @@ Consider:
 """.strip()
 
 
-# 新增模型校验函数，保持国赛格式校验功能
-def validate_modeler_prompt() -> None | NoReturn:
-    """
-    校验建模者提示词中的JSON格式，确保符合国赛输出规范：
-    1. JSON可正常解析 2. 包含所有必填字段 3. 无嵌套结构
-    """
+def validate_modeler_prompt(MODELER_PROMPT: str) -> None:
+    """增强版JSON格式校验"""
     try:
-        # 提取提示词中的JSON示例（从```json到```之间）
+        # 提取JSON片段（原逻辑保留）
         json_start = MODELER_PROMPT.find("```json") + len("```json")
         json_end = MODELER_PROMPT.find("```", json_start)
         if json_start == -1 or json_end == -1:
             raise ValueError("建模提示词中未找到JSON格式示例（需用```json包裹）")
-        
         json_example = MODELER_PROMPT[json_start:json_end].strip()
-        # 校验JSON语法合法性
-        json_data = json.loads(json_example)
-        
-        # 校验必填字段（国赛建模输出核心字段）
+
+        # 严格模式解析（拒绝无效转义）
+        json_data = json.loads(json_example, strict=True)
+
+        # 校验必填字段
         required_fields: List[str] = ["eda", "sensitivity_analysis"]
         missing_fields = [f for f in required_fields if f not in json_data]
         if missing_fields:
-            raise ValueError(f"建模提示词缺失国赛必填字段：{', '.join(missing_fields)}")
-        
-        # 校验是否存在至少1个问题字段（ques1/ques2...）
+            raise ValueError(f"缺失国赛必填字段：{', '.join(missing_fields)}")
+
+        # 校验问题字段
         question_fields = [k for k in json_data.keys() if k.startswith("ques")]
         if not question_fields:
-            raise ValueError("建模提示词JSON需包含至少1个问题字段（如ques1）")
-        
-        # 校验无嵌套结构（国赛输出格式硬性要求）
-        for key, value in json_data.items():
-            if isinstance(value, (dict, list)):
-                raise ValueError(f"建模提示词JSON存在嵌套结构，字段[{key}]的值类型为{type(value).__name__}，不符合国赛规范")
+            raise ValueError("需包含至少1个问题字段（如ques1）")
+
+        # 递归检查嵌套结构（增强版）
+        def check_nested(obj: Any, path: str = "") -> None:
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    new_path = f"{path}.{k}" if path else k
+                    check_nested(v, new_path)
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    new_path = f"{path}[{i}]"
+                    check_nested(item, new_path)
+            # 允许基本类型
+            elif not isinstance(obj, (str, int, float, bool, type(None))):
+                raise ValueError(f"字段{path}包含不支持的类型：{type(obj).__name__}")
+
+        check_nested(json_data)
 
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"国赛建模提示词JSON格式错误：{str(e)}\n错误片段：{json_example}") from e
+        raise RuntimeError(f"JSON格式错误（位置{e.pos}）：{e.msg}\n片段：{json_example}") from e
     except ValueError as e:
-        raise RuntimeError(f"国赛建模提示词格式校验失败：{str(e)}") from e
+        raise RuntimeError(f"格式校验失败：{str(e)}") from e

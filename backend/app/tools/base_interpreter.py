@@ -1,6 +1,8 @@
 # base_interpreter.py
 import abc
 import re
+from typing import Awaitable, List  # 关键：添加这行导入
+from typing import Optional, Tuple, Union  # 若已有其他typing导入，合并进去即可
 from app.tools.notebook_serializer import NotebookSerializer
 from app.services.redis_manager import redis_manager
 from app.utils.log_util import logger
@@ -59,6 +61,11 @@ class BaseCodeInterpreter(abc.ABC):
             self.task_id,
             agent_msg,
         )
+        
+    @abc.abstractmethod
+    def list_files(self) -> list[str] | Awaitable[list[str]]:
+        """列出工作目录中的文件"""
+        ...
 
     def add_section(self, section_name: str) -> None:
         """确保添加的section结构正确"""

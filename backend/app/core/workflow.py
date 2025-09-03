@@ -12,7 +12,6 @@ from app.tools.notebook_serializer import NotebookSerializer
 from app.core.flows import Flows
 from app.core.llm.llm_factory import LLMFactory
 
-
 class WorkFlow:
     def __init__(self):
         pass
@@ -143,12 +142,12 @@ class MathModelWorkFlow(WorkFlow):
             )
 
             ## TODO: 图片引用错误
+            formatted_images = [f"./{img}" for img in coder_response.created_images]  # 假设图片在工作目录
             writer_response = await writer_agent.run(
                 writer_prompt,
-                available_images=coder_response.created_images,
+                available_images=formatted_images,
                 sub_title=key,
             )
-
             await redis_manager.publish_message(
                 self.task_id,
                 SystemMessage(content=f"论文手完成{key}部分"),

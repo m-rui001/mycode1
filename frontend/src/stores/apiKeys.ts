@@ -1,11 +1,11 @@
+// 简化后的apiKeys.ts
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { AgentType } from "@/utils/enum";
 import type { ModelConfig } from "@/utils/interface";
 
-
 export const useApiKeyStore = defineStore('apiKeys', () => {
-  // 各个模型的配置
+  // 保留基础配置存储，移除前端校验相关计算属性
   const coordinatorConfig = ref<ModelConfig>({
     apiKey: '',
     baseUrl: '',
@@ -30,31 +30,20 @@ export const useApiKeyStore = defineStore('apiKeys', () => {
     modelId: ''
   });
 
-  const isEmpty = computed(() => {
-    return Object.values(getAllAgentConfigs()).every(config => config.apiKey === '')
-  })
-  
-  // 设置协调者模型配置
+  // 保留基础setter方法
   function setCoordinatorConfig(config: ModelConfig) {
     coordinatorConfig.value = { ...config };
   }
-
-  // 设置建模者模型配置
   function setModelerConfig(config: ModelConfig) {
     modelerConfig.value = { ...config };
   }
-
-  // 设置编码者模型配置
   function setCoderConfig(config: ModelConfig) {
     coderConfig.value = { ...config };
   }
-
-  // 设置写作者模型配置
   function setWriterConfig(config: ModelConfig) {
     writerConfig.value = { ...config };
   }
 
-  // 获取所有 agent 配置
   function getAllAgentConfigs() {
     return {
       [AgentType.COORDINATOR]: coordinatorConfig.value,
@@ -64,7 +53,6 @@ export const useApiKeyStore = defineStore('apiKeys', () => {
     };
   }
 
-  // 重置所有配置
   function resetAll() {
     coordinatorConfig.value = { apiKey: '', baseUrl: '', modelId: '' };
     modelerConfig.value = { apiKey: '', baseUrl: '', modelId: '' };
@@ -73,14 +61,10 @@ export const useApiKeyStore = defineStore('apiKeys', () => {
   }
 
   return {
-    // 状态
     coordinatorConfig,
     modelerConfig,
     coderConfig,
     writerConfig,
-    isEmpty,
-    
-    // 方法
     setCoordinatorConfig,
     setModelerConfig,
     setCoderConfig,
@@ -89,5 +73,5 @@ export const useApiKeyStore = defineStore('apiKeys', () => {
     resetAll
   }
 }, {
-  persist: true // 启用持久化存储
+  persist: true
 });

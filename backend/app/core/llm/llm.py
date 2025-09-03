@@ -2,6 +2,7 @@ import json
 from app.utils.common_utils import transform_link, split_footnotes
 from app.utils.log_util import logger
 import time
+from jsonschema import validate  # 需导入
 from app.schemas.response import (
     CoderMessage,
     WriterMessage,
@@ -278,3 +279,19 @@ async def simple_chat(model: LLM, history: list) -> str:
 
     response = await acompletion(**kwargs)
     return response.choices[0].message.content
+    
+    tool_schemas = {
+        "search_papers": {"properties": {"query": {"type": "string"}}, "required": ["query"]}
+    }
+
+    # 对每个tool_call添加参数校验
+    for tool_call in msg["tool_calls"]:
+        func_name = tool_call["function"]["name"]
+        if func_name in tool_schemas:
+            try:
+                args = json.loads(tool_call["function"]["arguments"])
+                validate(instance=args, schema=tool_schemas[func_name])
+            except Exception as e:
+                ic(f"  ❌ 参数无效: {e}")
+                invalid_tool_calls.append(tool_call)
+                continue

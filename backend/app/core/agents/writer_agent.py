@@ -1,3 +1,5 @@
+import asyncio
+import os
 from app.core.agents.agent import Agent
 from app.core.llm.llm import LLM
 from app.core.prompts import get_writer_prompt
@@ -160,3 +162,7 @@ class WriterAgent(Agent):  # 同样继承自Agent类
             logger.error(f"总结生成失败: {str(e)}")
             # 返回一个基础总结，避免完全失败
             return "由于网络原因无法生成详细总结，但已完成主要任务处理。"
+    async def process_parallel_sections(sections):
+        return await asyncio.gather(*[self.write_section(sec) for sec in sections])
+    def get_workdir_files(self):
+        return [f for f in os.listdir(self.task_id) if os.path.isfile(f)]
